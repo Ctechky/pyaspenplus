@@ -49,14 +49,16 @@ class ChemlibAdapter:
         """Molar mass [g/mol] of *formula* (e.g. ``'CH3OH'``)."""
         _require_chemlib()
         c = Compound(formula)
-        return c.molar_mass
+        mm = c.molar_mass
+        return mm() if callable(mm) else mm
 
     @staticmethod
     def composition(formula: str) -> dict[str, float]:
         """Mass-percent composition of *formula*."""
         _require_chemlib()
         c = Compound(formula)
-        return c.percentage_by_mass
+        pbm = c.percentage_by_mass
+        return pbm() if callable(pbm) else pbm
 
     # ------------------------------------------------------------------
     # Reaction balancing

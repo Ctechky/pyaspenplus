@@ -48,26 +48,48 @@ class ChemicsAdapter:
     def molecular_weight(formula: str) -> float:
         """Molecular weight [g/mol] from chemical formula."""
         _require_chemics()
-        return cm.mw(formula)
+        return cm.molecular_weight(formula)
 
     @staticmethod
     def gas_viscosity(formula: str, T: float) -> float:
-        """Gas viscosity [µP] at temperature *T* [K] using chemics correlation.
-
-        Falls back gracefully if the component is not in the chemics database.
-        """
+        """Gas viscosity [uP] at temperature *T* [K] using chemics Gas class."""
         _require_chemics()
-        return cm.mu_gas(formula, T)
+        g = cm.Gas(formula, T)
+        return g.viscosity()
 
     @staticmethod
     def gas_thermal_conductivity(formula: str, T: float) -> float:
-        """Gas thermal conductivity [W/(m·K)] at *T* [K]."""
+        """Gas thermal conductivity [W/(m*K)] at *T* [K]."""
         _require_chemics()
-        return cm.k_gas(formula, T)
+        g = cm.Gas(formula, T)
+        return g.thermal_conductivity()
 
     # ------------------------------------------------------------------
     # Particle / bed properties (useful for catalytic reactor design)
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def archimedes_number(
+        dp: float,
+        rho_s: float,
+        rho_g: float,
+        mu_g: float,
+    ) -> float:
+        """Archimedes number for a particle in a fluid.
+
+        Parameters
+        ----------
+        dp : float
+            Particle diameter [m].
+        rho_s : float
+            Solid density [kg/m^3].
+        rho_g : float
+            Gas density [kg/m^3].
+        mu_g : float
+            Gas dynamic viscosity [Pa*s].
+        """
+        _require_chemics()
+        return cm.archimedes(dp, rho_g, mu_g, rho_s)
 
     @staticmethod
     def minimum_fluidisation_velocity(
@@ -76,32 +98,17 @@ class ChemicsAdapter:
         rho_g: float,
         mu_g: float,
     ) -> float:
-        """Minimum fluidisation velocity [m/s] using the Ergun equation.
+        """Minimum fluidisation velocity [m/s] using Wen-Yu correlation.
 
-        Parameters
-        ----------
-        dp : float
-            Particle diameter [m].
-        rho_s : float
-            Solid (catalyst) density [kg/m³].
-        rho_g : float
-            Gas density [kg/m³].
-        mu_g : float
-            Gas dynamic viscosity [Pa·s].
+        Ar = d_p^3 * rho_g * (rho_s - rho_g) * g / mu_g^2
+        Re_mf = (33.7^2 + 0.0408*Ar)^0.5 - 33.7
+        u_mf = Re_mf * mu_g / (dp * rho_g)
         """
-        _require_chemics()
-        return cm.umf(dp, rho_s, rho_g, mu_g)
-
-    @staticmethod
-    def terminal_velocity(
-        dp: float,
-        rho_s: float,
-        rho_g: float,
-        mu_g: float,
-    ) -> float:
-        """Terminal velocity [m/s] of a spherical particle."""
-        _require_chemics()
-        return cm.ut(dp, rho_s, rho_g, mu_g)
+        import math
+        g = 9.81
+        Ar = dp**3 * rho_g * (rho_s - rho_g) * g / mu_g**2
+        Re_mf = math.sqrt(33.7**2 + 0.0408 * Ar) - 33.7
+        return Re_mf * mu_g / (dp * rho_g)
 
     @staticmethod
     def bed_expansion_ratio(
