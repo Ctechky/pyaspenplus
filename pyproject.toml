@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "pyaspenplus"
-version = "0.2.0"
+version = "0.3.0"
 description = "Open-source Python library for Aspen Plus simulation interfacing, analysis, and optimization"
 readme = "README.md"
 license = {text = "MIT"}

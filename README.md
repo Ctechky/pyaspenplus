@@ -2,7 +2,7 @@
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-80%20passed-brightgreen.svg)](#testing-status)
+[![Tests](https://img.shields.io/badge/tests-102%20passed-brightgreen.svg)](#testing-status)
 
 Open-source Python library for interfacing with **Aspen Plus** process simulations, integrating with the scientific Python ecosystem for analysis, visualization, and optimization.
 
@@ -12,24 +12,29 @@ Open-source Python library for interfacing with **Aspen Plus** process simulatio
 
 ## Architecture
 
-`pyaspenplus` provides **dual-mode** access to Aspen Plus models:
+`pyaspenplus` provides **three modes** of access to Aspen Plus models:
 
 - **COM mode** — full read/write control of a live Aspen Plus instance via the Windows COM interface (`pywin32`). Requires Aspen Plus installed.
-- **Parser mode** — lightweight reading of `.bkp` (backup) files without needing Aspen Plus on the machine.
+- **Parser mode** — read AND write `.bkp` (backup) files without needing Aspen Plus. Modify stream conditions, block parameters, and component flows directly in the file.
+- **Batch mode** — run Aspen Plus simulations via command line (`AspenPlus.exe /f /r`) using `subprocess`. No COM needed, just Aspen Plus installed.
 
 ```
 User Code
    |
    v
 Simulation  ──>  COM Adapter (pywin32)  ──>  Aspen Plus (live)
-   |                                              |
-   |──>  BKP Parser (text/XML)  ──>  .bkp files   |
-   |                                              |
-   +── Models (Blocks, Streams, Flowsheet)         |
-   +── Reactions (stoichiometry, kinetics)         |
-   +── Materials (components, feeds)               |
-   +── Economics (APEA + custom CAPEX/OPEX)        |
-   +── Optimization (scipy / Pyomo / pymoo / BO)   |
+   |
+   |──>  BKP Writer (modify inputs)  ──>  .bkp files (read+write)
+   |          |
+   |          +──>  Batch Runner (subprocess)  ──>  AspenPlus.exe /f /r
+   |          |
+   |          +──>  BKP Parser (read results)  <──  output .bkp
+   |
+   +── Models (Blocks, Streams, Flowsheet)
+   +── Reactions (stoichiometry, kinetics)
+   +── Materials (components, feeds)
+   +── Economics (APEA + custom CAPEX/OPEX)
+   +── Optimization (scipy / Pyomo / pymoo / BO)
    +── Integrations (CoolProp, Cantera, chemlib, chemics, ...)
    +── Visualization (Matplotlib / Seaborn)
 ```
@@ -40,9 +45,11 @@ Simulation  ──>  COM Adapter (pywin32)  ──>  Aspen Plus (live)
 
 | Module | Description |
 |---|---|
-| `core.simulation` | Unified entry point — load from `.apw` (COM) or `.bkp` (parser) |
+| `core.simulation` | Unified entry point — COM, BKP parser, BKP writer, batch runner |
 | `core.com_adapter` | COM automation wrapper for Aspen Plus via `pywin32` |
 | `core.bkp_parser` | `.bkp` file parser — extract components, blocks, streams, reactions |
+| `core.bkp_writer` | `.bkp` file writer — modify stream/block inputs and save back |
+| `core.batch_runner` | Command-line runner — execute `AspenPlus.exe` via subprocess |
 | `core.metadata` | Read/write simulation metadata (title, author, property method) |
 | `models` | Block, Stream, and Flowsheet classes with topology queries |
 | `reactions` | Reaction stoichiometry, kinetic parameters (Arrhenius), type classification |
@@ -158,6 +165,57 @@ for block in sim.flowsheet.blocks:
     print(block.name, block.block_type)
 ```
 
+### BKP write-back (modify inputs without Aspen Plus)
+
+```python
+from pyaspenplus import Simulation
+
+sim = Simulation.from_bkp("model.bkp")
+
+# Modify inputs directly in the .bkp file
+sim.set_bkp_stream_temp("FEED", 550.0)
+sim.set_bkp_stream_pressure("FEED", 80.0)
+sim.set_bkp_stream_flow("FEED", "H2", 0.90)
+sim.set_bkp_block_param("REACTOR", "TEMP", 260.0)
+
+# Save modified file
+sim.save_bkp("model_modified.bkp")
+
+# See what changed
+print(sim.bkp_changes)
+```
+
+### Batch mode (command line, no COM needed)
+
+```python
+from pyaspenplus import Simulation
+
+# Modify + run + read results — all without COM
+sim = Simulation.from_bkp("model.bkp")
+sim.set_bkp_stream_temp("FEED", 550.0)
+sim.save_bkp("model_run.bkp")
+
+# Run via AspenPlus.exe command line
+result = sim.batch_run("model_run.bkp")
+print(result.summary())  # SUCCESS/FAILED, elapsed time
+
+# Results are auto-parsed — access as usual
+for stream in sim.flowsheet.streams:
+    print(stream.name, stream.temperature)
+```
+
+```python
+# Or use the low-level BatchRunner directly
+from pyaspenplus.core.batch_runner import BatchRunner
+
+runner = BatchRunner()  # auto-detects AspenPlus.exe
+# runner = BatchRunner(r"C:\Program Files\AspenTech\...\AspenPlus.exe")
+# or set ASPENPLUS_EXE environment variable
+
+result = runner.run("model.bkp", timeout=600)
+run_result, parsed = runner.run_and_parse("model.bkp")
+```
+
 ### Economics
 
 ```python
@@ -244,7 +302,7 @@ fig.savefig("pfr_profile.png", dpi=200)
 
 ```
 pyaspenplus/
-├── core/                  # Simulation loading, COM, BKP parser, metadata
+├── core/                  # Simulation, COM, BKP parser/writer, batch runner, metadata
 ├── models/                # Block, Stream, Flowsheet
 ├── reactions/             # Reaction, ReactionSet, kinetics
 ├── materials/             # Component, ComponentList, Feed
@@ -263,6 +321,9 @@ pyaspenplus/
 | Category | Tests | Status |
 |---|---|---|
 | BKP parser | 8 | Passed |
+| BKP writer (read-modify-write) | 13 | Passed |
+| Batch runner | 5 | Passed |
+| Simulation BKP write-back | 4 | Passed |
 | Economics (CAPEX/OPEX) | 8 | Passed |
 | Methanol kinetics + PFR | 7 | Passed |
 | Models (blocks/streams/flowsheet) | 8 | Passed |
@@ -275,7 +336,7 @@ pyaspenplus/
 | PyChemEngg integration | 6 | Passed |
 | Matplotlib + flowsheet | 5 | Passed |
 | Cantera integration | 2 | Skipped (not installed) |
-| **Total** | **82** | **80 passed, 2 skipped** |
+| **Total** | **104** | **102 passed, 2 skipped** |
 
 ### What has NOT been tested yet
 
@@ -285,11 +346,13 @@ pyaspenplus/
   - Running simulations
   - Reading APEA economic results
   - The optimization loop (set variables -> run -> read results)
+- **Batch runner with a live Aspen Plus instance** — the `BatchRunner` class is implemented but needs testing on a machine with Aspen Plus installed to verify command-line arguments and output parsing
 - **Cantera integration** — requires `conda install -c cantera cantera` on Windows
 
 ### What HAS been tested
 
-- All Python-side logic: BKP parsing, data models, reaction classes, kinetics, economics correlations, optimization framework, unit conversions
+- All Python-side logic: BKP parsing, BKP write-back (modify + save), batch runner framework, data models, reaction classes, kinetics, economics correlations, optimization framework, unit conversions
+- Full modify-save-reparse cycle: change stream/block values in `.bkp` files and verify the output is parseable with correct values
 - Integration adapters: CoolProp, chemlib, chemics, polykin, pychemengg, Matplotlib
 - Methanol synthesis example: Bussche & Froment kinetics, isothermal PFR solver
 - Visualization: composition profiles, cost breakdowns, flowsheet diagrams
@@ -307,7 +370,7 @@ Contributions are very welcome, especially:
 5. **BKP parser improvements** — handle more `.bkp` file variations
 
 ```bash
-git clone https://github.com/pyaspenplus/pyaspenplus.git
+git clone https://github.com/Ctechky/pyaspenplus.git
 cd pyaspenplus
 pip install -e ".[dev,all]"
 pytest tests/ -v

@@ -1,10 +1,13 @@
 """Unified Simulation entry point for pyaspenplus.
 
-Provides two loading strategies:
+Provides three loading strategies:
 
 - ``Simulation.from_file(path)`` — opens an ``.apw`` or ``.bkp`` file via the
   Aspen Plus COM automation server (requires Aspen Plus installed).
 - ``Simulation.from_bkp(path)`` — parses a ``.bkp`` file without Aspen Plus.
+  Supports read-only access plus **write-back** (modify inputs, save file).
+- ``Simulation.batch_run(path)`` — runs via the Aspen Plus command-line
+  interface (no COM required, but Aspen Plus must be installed).
 """
 
 from __future__ import annotations
@@ -49,9 +52,11 @@ class Simulation:
     """
 
     def __init__(self) -> None:
-        self._mode: str = "none"  # "com" | "bkp"
+        self._mode: str = "none"  # "com" | "bkp" | "batch"
         self._adapter: Any = None  # COMAdapter (only in COM mode)
         self._parsed: BKPParseResult | None = None
+        self._writer: Any = None  # BKPWriter (BKP / batch modes)
+        self._filepath: Path | None = None
         self._info: SimulationInfo | None = None
         self._flowsheet: Flowsheet | None = None
         self._components: ComponentList | None = None
@@ -94,15 +99,23 @@ class Simulation:
     def from_bkp(cls, filepath: str | Path) -> "Simulation":
         """Parse a ``.bkp`` file without Aspen Plus.
 
+        Also enables **write-back**: call :meth:`set_bkp_value` to modify
+        inputs, then :meth:`save_bkp` to write a new file.  Combine with
+        :meth:`batch_run` for a full modify-run-read cycle without COM.
+
         Parameters
         ----------
         filepath : str | Path
             Path to a ``.bkp`` backup file.
         """
+        from pyaspenplus.core.bkp_writer import BKPWriter
+
         sim = cls()
         sim._mode = "bkp"
+        sim._filepath = Path(filepath).resolve()
         parser = BKPParser(filepath)
         sim._parsed = parser.parse()
+        sim._writer = BKPWriter(filepath)
         log.info("Simulation loaded via BKP parser: %s", filepath)
         return sim
 
@@ -173,7 +186,7 @@ class Simulation:
         return self._materials
 
     # ------------------------------------------------------------------
-    # Simulation control (COM only)
+    # Simulation control (COM mode)
     # ------------------------------------------------------------------
 
     def run(self, *, timeout: int | None = None) -> None:
@@ -189,7 +202,7 @@ class Simulation:
         self._invalidate_cache()
 
     # ------------------------------------------------------------------
-    # Variable tree access (COM only)
+    # Variable tree access (COM mode)
     # ------------------------------------------------------------------
 
     def get_value(self, path: str) -> Any:
@@ -203,7 +216,7 @@ class Simulation:
         self._adapter.set_value(path, value)
 
     # ------------------------------------------------------------------
-    # Metadata mutation (COM only)
+    # Metadata mutation (COM mode)
     # ------------------------------------------------------------------
 
     def set_metadata(self, key: str, value: Any) -> None:
@@ -211,6 +224,118 @@ class Simulation:
         self._require_com("set_metadata")
         set_metadata_com(self._adapter, key, value)
         self._info = None  # refresh on next access
+
+    # ------------------------------------------------------------------
+    # BKP write-back (no Aspen Plus needed)
+    # ------------------------------------------------------------------
+
+    def set_bkp_stream_temp(self, stream: str, value: float) -> None:
+        """Modify a stream temperature in the loaded BKP file."""
+        self._require_writer("set_bkp_stream_temp")
+        self._writer.set_stream_temp(stream, value)
+
+    def set_bkp_stream_pressure(self, stream: str, value: float) -> None:
+        """Modify a stream pressure in the loaded BKP file."""
+        self._require_writer("set_bkp_stream_pressure")
+        self._writer.set_stream_pressure(stream, value)
+
+    def set_bkp_stream_flow(
+        self, stream: str, component: str, value: float
+    ) -> None:
+        """Modify a component flow in the loaded BKP file."""
+        self._require_writer("set_bkp_stream_flow")
+        self._writer.set_stream_component_flow(stream, component, value)
+
+    def set_bkp_block_param(
+        self, block: str, param: str, value: float | str
+    ) -> None:
+        """Modify a block parameter in the loaded BKP file."""
+        self._require_writer("set_bkp_block_param")
+        self._writer.set_block_param(block, param, value)
+
+    def save_bkp(
+        self, filepath: str | Path | None = None, *, backup: bool = True
+    ) -> Path:
+        """Save the modified BKP file.
+
+        Parameters
+        ----------
+        filepath : str | Path | None
+            Destination.  ``None`` = overwrite original (with ``.bak`` backup).
+        backup : bool
+            Create a backup before overwriting.
+
+        Returns
+        -------
+        Path
+            Path to the saved file.
+        """
+        self._require_writer("save_bkp")
+        dest = self._writer.save(filepath, backup=backup)
+        log.info("Saved modified BKP to %s", dest)
+        return dest
+
+    @property
+    def bkp_changes(self) -> list[str]:
+        """List of modifications made to the BKP file."""
+        if self._writer is None:
+            return []
+        return self._writer.change_log
+
+    # ------------------------------------------------------------------
+    # Batch mode (command-line, no COM)
+    # ------------------------------------------------------------------
+
+    def batch_run(
+        self,
+        filepath: str | Path | None = None,
+        *,
+        exe_path: str | Path | None = None,
+        timeout: int = 3600,
+    ) -> "BatchRunResult":
+        """Run the simulation via the Aspen Plus command line.
+
+        This does NOT require COM — it calls ``AspenPlus.exe /f /r``
+        as a subprocess.  Works in both ``bkp`` and ``batch`` modes.
+
+        Parameters
+        ----------
+        filepath : str | Path | None
+            BKP file to run.  If ``None``, uses the file loaded by
+            :meth:`from_bkp` (or the last :meth:`save_bkp` output).
+        exe_path : str | Path | None
+            Explicit path to ``AspenPlus.exe``.  Auto-detected if omitted.
+        timeout : int
+            Max seconds to wait.
+
+        Returns
+        -------
+        BatchRunResult
+        """
+        from pyaspenplus.core.batch_runner import BatchRunner, BatchRunResult
+
+        target = Path(filepath) if filepath else self._filepath
+        if target is None:
+            raise RuntimeError(
+                "No file to run. Pass a filepath or load with from_bkp() first."
+            )
+
+        runner = BatchRunner(exe_path, timeout=timeout)
+        if not runner.is_available:
+            raise RuntimeError(
+                "Aspen Plus executable not found. "
+                "Set ASPENPLUS_EXE env variable or pass exe_path."
+            )
+
+        result = runner.run(target)
+
+        if result.success and result.output_file:
+            parser = BKPParser(result.output_file)
+            self._parsed = parser.parse()
+            self._invalidate_cache()
+            log.info("Batch run succeeded, results parsed from %s", result.output_file)
+
+        return result
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -245,6 +370,13 @@ class Simulation:
             raise RuntimeError(
                 f"'{op}' requires COM mode. "
                 "Load with Simulation.from_file() instead of from_bkp()."
+            )
+
+    def _require_writer(self, op: str) -> None:
+        if self._writer is None:
+            raise RuntimeError(
+                f"'{op}' requires BKP mode with write support. "
+                "Load with Simulation.from_bkp() first."
             )
 
     def _invalidate_cache(self) -> None:
