@@ -35,3 +35,10 @@ htmlcov/
 
 .DS_Store
 Thumbs.db
+
+# Personal data / FYP-specific files
+*.xlsx
+*.zip
+*.png
+kinetic_plot.py
+kinetic_validation.py
