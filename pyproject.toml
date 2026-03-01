@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "pyaspenplus"
+version = "0.1.0"
+description = "Open-source Python library for Aspen Plus simulation interfacing, analysis, and optimization"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "pyaspenplus contributors"},
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+keywords = ["aspen-plus", "process-simulation", "chemical-engineering", "optimization"]
+dependencies = [
+    "pywin32>=306",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "lxml>=4.9",
+]
+
+[project.optional-dependencies]
+scipy = ["scipy>=1.11"]
+pyomo = ["pyomo>=6.6"]
+evolutionary = ["pymoo>=0.6"]
+bayesian = ["scikit-optimize>=0.9", "botorch>=0.9", "gpytorch>=1.11"]
+all = [
+    "scipy>=1.11",
+    "pyomo>=6.6",
+    "pymoo>=0.6",
+    "scikit-optimize>=0.9",
+    "botorch>=0.9",
+    "gpytorch>=1.11",
+]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "black>=23.0",
+    "ruff>=0.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/pyaspenplus/pyaspenplus"
+Repository = "https://github.com/pyaspenplus/pyaspenplus"
+Issues = "https://github.com/pyaspenplus/pyaspenplus/issues"
+
+[tool.setuptools.packages.find]
+include = ["pyaspenplus*"]
+
+[tool.ruff]
+line-length = 99
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
