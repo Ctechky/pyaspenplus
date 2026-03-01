@@ -63,7 +63,7 @@ class OPEXResult:
             f"  Labor         : ${self.labor_cost:>14,.0f}",
             f"  Maintenance   : ${self.maintenance_cost:>14,.0f}",
             f"  Overhead      : ${self.overhead_cost:>14,.0f}",
-            f"  ────────────────────────────",
+            f"  ----------------------------",
             f"  Total OPEX    : ${self.total_opex:>14,.0f}",
         ]
         return "\n".join(lines)

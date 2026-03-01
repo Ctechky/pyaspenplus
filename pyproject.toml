@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "pyaspenplus"
-version = "0.1.0"
+version = "0.2.0"
 description = "Open-source Python library for Aspen Plus simulation interfacing, analysis, and optimization"
 readme = "README.md"
 license = {text = "MIT"}
@@ -37,6 +37,13 @@ scipy = ["scipy>=1.11"]
 pyomo = ["pyomo>=6.6"]
 evolutionary = ["pymoo>=0.6"]
 bayesian = ["scikit-optimize>=0.9", "botorch>=0.9", "gpytorch>=1.11"]
+coolprop = ["CoolProp>=6.5"]
+cantera = ["cantera>=3.0"]
+chemlib = ["chemlib>=4.1"]
+pychemengg = ["pychemengg>=1.0"]
+chemics = ["chemics>=22.10"]
+polykin = ["polykin>=0.5"]
+plotting = ["matplotlib>=3.7", "seaborn>=0.12"]
 all = [
     "scipy>=1.11",
     "pyomo>=6.6",
@@ -44,12 +51,21 @@ all = [
     "scikit-optimize>=0.9",
     "botorch>=0.9",
     "gpytorch>=1.11",
+    "CoolProp>=6.5",
+    "cantera>=3.0",
+    "chemlib>=4.1",
+    "pychemengg>=1.0",
+    "chemics>=22.10",
+    "polykin>=0.5",
+    "matplotlib>=3.7",
+    "seaborn>=0.12",
 ]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
     "black>=23.0",
     "ruff>=0.1",
+    "matplotlib>=3.7",
 ]
 
 [project.urls]

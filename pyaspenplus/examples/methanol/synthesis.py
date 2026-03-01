@@ -92,11 +92,17 @@ class MethanolSynthesis:
         F_total_in = self.total_molar_flow
         F_in = np.array([self.feed_composition.get(sp, 0.0) * F_total_in for sp in species])
 
+        # Inert species (N2, etc.) that don't react but dilute the gas
+        inert_frac = sum(
+            v for k, v in self.feed_composition.items() if k not in species
+        )
+        F_inert = inert_frac * F_total_in  # constant along reactor
+
         T = self.temperature
         P = self.pressure
 
         def rhs(z: float, F: np.ndarray) -> np.ndarray:
-            F_total = max(F.sum(), 1e-30)
+            F_total = max(F.sum() + F_inert, 1e-30)
             y = {sp: max(F[i] / F_total, 0.0) for i, sp in enumerate(species)}
             rates = self.kinetics.species_rates(T, P, y)
             dFdz = np.array([rates.get(sp, 0.0) * A_cs * (1 - self.catalyst_void_fraction)
@@ -110,7 +116,7 @@ class MethanolSynthesis:
                         rtol=1e-8, atol=1e-12)
 
         result: dict[str, np.ndarray] = {"z": sol.t}
-        F_total = sol.y.sum(axis=0)
+        F_total = sol.y.sum(axis=0) + F_inert
         F_total = np.where(F_total > 0, F_total, 1e-30)
 
         for i, sp in enumerate(species):
