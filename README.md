@@ -359,6 +359,37 @@ pyaspenplus/
 
 ---
 
+## Version History
+
+### v0.3.0 — BKP Write-Back & Batch Runner
+
+- **BKP Writer** (`core.bkp_writer`) — modify stream temperatures, pressures, flows, component fractions, and block parameters directly in `.bkp` files. Save with auto-backup.
+- **Batch Runner** (`core.batch_runner`) — run Aspen Plus via `AspenPlus.exe /f /r` command line (subprocess), bypassing COM entirely. Auto-detects install path or uses `ASPENPLUS_EXE` env variable.
+- **Simulation integration** — new `set_bkp_*`, `save_bkp()`, and `batch_run()` methods on the `Simulation` class for a full modify-run-read cycle without COM.
+- **22 new tests** (102 total, 102 passed, 2 skipped)
+
+### v0.2.0 — Integration Adapters & Visualization
+
+- **7 integration adapters**: CoolProp, Cantera, chemlib, PyChemEngg, chemics, polykin, Matplotlib
+- **Visualization module**: flowsheet diagrams, composition profiles, cost breakdowns, optimization convergence plots
+- **`available_integrations()`** helper to check which optional libraries are installed
+- Fixed methanol PFR solver to account for inert species (N2)
+- Fixed Unicode errors in OPEX summary on Windows console
+- **22 new tests** (82 total, 80 passed, 2 skipped)
+
+### v0.1.0 — Initial Release
+
+- **Core**: COM adapter (`pywin32`), BKP parser, metadata reader/writer
+- **Models**: Block, Stream, Flowsheet with topology queries
+- **Reactions**: Stoichiometry, Arrhenius kinetic parameters, reaction type classification
+- **Materials**: Component properties, feed specifications
+- **Economics**: APEA COM reader, Turton CAPEX correlations (CEPCI-indexed), OPEX models, NPV, levelized cost
+- **Optimization**: Pluggable interface for scipy, Pyomo, pymoo, and Bayesian (scikit-optimize/BoTorch)
+- **Example**: Bussche & Froment (1996) methanol synthesis kinetics with isothermal PFR solver
+- **60 tests** (60 passed)
+
+---
+
 ## Contributing
 
 Contributions are very welcome, especially:
